@@ -1,4 +1,4 @@
-﻿
+
 
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -6,6 +6,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>לוח מעקב הגעה בזמן 🕒</title>
+<link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%95%92%3C/text%3E%3C/svg%3E" />
 <style>
   :root {
     --pink: #17b3a3;      /* טורקיז ראשי (חני) */
@@ -650,7 +651,8 @@
     key:   "$2a$10$i/Lv0vUdY8FfMrOGJHx8lOAfuPwsmHifdXcj9BZzbX5.qBgugeUE6"
   };
   const SYNC_URL = "https://api.jsonbin.io/v3/b/";
-  const SYNC_POLL_MS = 20000; // כל כמה זמן לבדוק עדכונים מהצד השני (אפשר להגדיל אם חורגים ממכסה)
+  const SYNC_POLL_MS = 60000;      // בדיקת עדכונים מהצד השני (דקה) — חוסך במכסת הבקשות
+  const SYNC_IDLE_MS = 5 * 60000;  // אחרי 5 דק' ללא פעילות עוצרים בדיקות אוטומטיות (מתחדש בחזרה)
 
   function syncEnabled() { return !!(SYNC.binId && SYNC.key); }
   function syncHeaders() {
@@ -866,11 +868,25 @@
     }
     setSyncBadge("on", "🔄 מתחבר…");
     pullRemote(true).then(() => { checkWeekRollover(); render(); });
-    setInterval(() => { if (document.visibilityState === "visible") pullRemote(false); }, SYNC_POLL_MS);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") pullRemote(false);
-    });
-    window.addEventListener("focus", () => pullRemote(false));
+
+    // מעקב פעילות — כדי לעצור בדיקות בטאב שנשכח פתוח
+    let lastActivity = Date.now();
+    const markActivity = () => { lastActivity = Date.now(); };
+    ["click", "keydown", "mousemove", "touchstart"].forEach(
+      ev => document.addEventListener(ev, markActivity, { passive: true })
+    );
+
+    setInterval(() => {
+      if (document.visibilityState === "visible" && (Date.now() - lastActivity) < SYNC_IDLE_MS) {
+        pullRemote(false);
+      }
+    }, SYNC_POLL_MS);
+
+    const resume = () => {
+      if (document.visibilityState === "visible") { markActivity(); pullRemote(false); }
+    };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("focus", resume);
   }
 
   function render() {
@@ -1077,6 +1093,21 @@
   });
 
   document.getElementById("switch-btn").addEventListener("click", openIdentity);
+
+  // אייקון טאב מתקתק — שעון שמסתובב 🕐🕑🕒
+  (function animateFavicon() {
+    const CLOCKS = ["🕐","🕑","🕒","🕓","🕔","🕕","🕖","🕗","🕘","🕙","🕚","🕛"];
+    const favEl = document.getElementById("favicon");
+    let i = 0;
+    function tick() {
+      favEl.href = "data:image/svg+xml," + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">' + CLOCKS[i] + '</text></svg>'
+      );
+      i = (i + 1) % CLOCKS.length;
+    }
+    tick();
+    setInterval(tick, 700);
+  })();
 
   render();
   if (!identity) openIdentity();
