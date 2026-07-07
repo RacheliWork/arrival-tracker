@@ -5,8 +5,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>לוח מעקב הגעה בזמן 🕒</title>
+<title>לוח מעקב הגעה בזמן</title>
 <link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%95%92%3C/text%3E%3C/svg%3E" />
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   :root {
     --pink: #17b3a3;      /* טורקיז ראשי (חני) */
@@ -23,6 +24,51 @@
   }
 
   * { box-sizing: border-box; }
+
+  /* שעון חי בפינה */
+  .live-clock {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 60;
+    background: linear-gradient(135deg, rgba(23, 179, 163, 0.95), rgba(47, 159, 208, 0.95));
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 16px;
+    box-shadow: 0 10px 26px rgba(23, 179, 163, 0.4);
+    text-align: center;
+    min-width: 130px;
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+  }
+  .analog-clock {
+    display: block;
+    margin: 0 auto;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12));
+  }
+  .analog-clock .face {
+    fill: #ffffff;
+    stroke: rgba(255, 255, 255, 0.6);
+    stroke-width: 2;
+  }
+  .analog-clock .tick { stroke: #9fd6cf; stroke-width: 2; }
+  .analog-clock .hand { stroke-linecap: round; }
+  .analog-clock .hand.hour { stroke: #155e63; stroke-width: 4; }
+  .analog-clock .hand.min  { stroke: #17b3a3; stroke-width: 3; }
+  .analog-clock .hand.sec  { stroke: #ff7a59; stroke-width: 1.6; }
+  .analog-clock .pin { fill: #155e63; }
+
+  .live-clock .date {
+    font-size: 12px;
+    font-weight: 700;
+    opacity: 0.95;
+    margin-top: 6px;
+  }
+  @media (max-width: 520px) {
+    .live-clock { top: 8px; right: 8px; padding: 7px 10px; min-width: 0; }
+    .analog-clock { width: 64px; height: 64px; }
+    .live-clock .date { font-size: 11px; }
+  }
 
   body {
     margin: 0;
@@ -222,7 +268,7 @@
   .day-emoji { margin: 0; }
 
   .day-date {
-    min-width: 46px;
+    min-width: 62px;
     text-align: center;
     font-size: 13px;
     font-weight: 700;
@@ -558,6 +604,18 @@
 </style>
 </head>
 <body>
+  <div class="live-clock" id="live-clock">
+    <svg class="analog-clock" viewBox="0 0 100 100" width="88" height="88">
+      <circle class="face" cx="50" cy="50" r="46" />
+      <g id="clock-ticks"></g>
+      <line id="hand-hour" class="hand hour" x1="50" y1="50" x2="50" y2="30" />
+      <line id="hand-min" class="hand min" x1="50" y1="50" x2="50" y2="20" />
+      <line id="hand-sec" class="hand sec" x1="50" y1="50" x2="50" y2="15" />
+      <circle class="pin" cx="50" cy="50" r="2.8" />
+    </svg>
+    <div class="date" id="clock-date">—</div>
+  </div>
+
   <div class="wrap">
     <header>
       <h1>🕒 מי הגיעה בזמן?</h1>
@@ -654,6 +712,19 @@
   const SYNC_POLL_MS = 60000;      // בדיקת עדכונים מהצד השני (דקה) — חוסך במכסת הבקשות
   const SYNC_IDLE_MS = 5 * 60000;  // אחרי 5 דק' ללא פעילות עוצרים בדיקות אוטומטיות (מתחדש בחזרה)
 
+  // ===== שליחת מייל בסוף שבוע (EmailJS, חינמי) =====
+  // הקימי חשבון ב-emailjs.com, חברי שירות מייל ותבנית, והדביקי כאן את המזהים.
+  const EMAIL = {
+    publicKey:  "",          // ← Public Key מ-EmailJS
+    serviceId:  "",          // ← Service ID
+    templateId: "",          // ← Template ID
+    to: ["", ""]             // ← שתי כתובות המייל שיקבלו את ההודעה
+  };
+  function emailEnabled() {
+    return !!(EMAIL.publicKey && EMAIL.serviceId && EMAIL.templateId &&
+              EMAIL.to.filter(Boolean).length && window.emailjs);
+  }
+
   function syncEnabled() { return !!(SYNC.binId && SYNC.key); }
   function syncHeaders() {
     return {
@@ -667,6 +738,7 @@
       current: store.current,
       history: store.history,
       weekStart: store.weekStart || null,
+      emailed: store.emailed || {},
       updatedAt: store.updatedAt || 0
     };
   }
@@ -755,7 +827,7 @@
 
   // שמירת השבוע הנוכחי לארכיון והתחלת שבוע חדש
   function archiveWeek(label) {
-    store.history.push({
+    const week = {
       label: label,
       scores: {
         chani: countOnTime(store.current, "chani"),
@@ -765,9 +837,37 @@
         chani: countLate(store.current, "chani"),
         racheli: countLate(store.current, "racheli")
       }
-    });
+    };
+    store.history.push(week);
     store.current = emptyWeek();
     store.weekStart = sundayObj(currentSunday());
+    return week;
+  }
+
+  function winnerText(week) {
+    const c = week.scores.chani, r = week.scores.racheli;
+    if (c > r) return "חני 🏆";
+    if (r > c) return "רחלי 🏆";
+    return "תיקו 🤝 (שתיכן אלופות!)";
+  }
+
+  // שליחת מייל עם המנצחת בסוף השבוע — פעם אחת בלבד (עם סנכרון בין המכשירים)
+  function maybeSendWeeklyEmail(week) {
+    if (!emailEnabled()) return;
+    store.emailed = store.emailed || {};
+    if (store.emailed[week.label]) return;          // כבר נשלח עבור השבוע הזה
+    store.emailed[week.label] = true;
+    persist();                                       // מפיצים את הסימון כדי שהמכשיר השני לא ישלח שוב
+    const winner = winnerText(week);
+    EMAIL.to.filter(Boolean).forEach(addr => {
+      emailjs.send(EMAIL.serviceId, EMAIL.templateId, {
+        to_email: addr,
+        winner: winner,
+        chani_score: week.scores.chani,
+        racheli_score: week.scores.racheli,
+        week_label: week.label
+      }).catch(() => {});
+    });
   }
 
   // ארכוב אוטומטי כשמתחיל שבוע חדש (בנוסף לכפתור הידני)
@@ -776,14 +876,16 @@
     if (!store.weekStart) { store.weekStart = sundayObj(curSun); persist(); return; }
     const storedSun = new Date(store.weekStart.y, store.weekStart.m, store.weekStart.d);
     if (dayStamp(storedSun) !== dayStamp(curSun)) {
+      let archived = null;
       if (hasAnyMark(store.current)) {
         const thu = new Date(storedSun.getFullYear(), storedSun.getMonth(), storedSun.getDate() + 4);
-        archiveWeek("שבוע " + formatDate(storedSun) + " – " + formatDate(thu) + " (נשמר אוטומטית)");
+        archived = archiveWeek("שבוע " + formatDate(storedSun) + " – " + formatDate(thu) + " (נשמר אוטומטית)");
       } else {
         store.current = emptyWeek();
         store.weekStart = sundayObj(curSun);
       }
       persist();
+      if (archived) maybeSendWeeklyEmail(archived);
     }
   }
 
@@ -847,6 +949,7 @@
         store.current = rec.current || emptyWeek();
         store.history = Array.isArray(rec.history) ? rec.history : [];
         if (rec.weekStart) store.weekStart = rec.weekStart;
+        if (rec.emailed) store.emailed = rec.emailed;
         store.updatedAt = rec.updatedAt;
         save();
         render();
@@ -912,7 +1015,7 @@
       nameTd.className = "day-name" + (isToday ? " today" : "");
       nameTd.innerHTML = '<span class="name-txt">' + day.name + '</span>' +
         '<span class="day-emoji">' + day.emoji + '</span>' +
-        '<span class="day-date">' + date.getDate() + "/" + (date.getMonth() + 1) + '</span>';
+        '<span class="day-date">' + date.getDate() + "/" + (date.getMonth() + 1) + "/" + String(date.getFullYear()).slice(-2) + '</span>';
       tr.appendChild(nameTd);
 
       PLAYERS.forEach(player => {
@@ -1060,9 +1163,10 @@
       return;
     }
     if (confirm("לסיים את השבוע, לשמור אותו בארכיון ולהתחיל שבוע חדש?")) {
-      archiveWeek("שבוע שהסתיים ב-" + formatDate(new Date()));
+      const week = archiveWeek("שבוע שהסתיים ב-" + formatDate(new Date()));
       persist();
       render();
+      maybeSendWeeklyEmail(week);
     }
   });
 
@@ -1094,7 +1198,43 @@
 
   document.getElementById("switch-btn").addEventListener("click", openIdentity);
 
-  // אייקון טאב מתקתק — שעון שמסתובב 🕐🕑🕒 
+  // שעון אנלוגי חי בפינה — מחוגים מסתובבים + תאריך, מתעדכן כל שנייה
+  (function analogClock() {
+    const WEEKDAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+    const SVGNS = "http://www.w3.org/2000/svg";
+    const ticks = document.getElementById("clock-ticks");
+    for (let i = 0; i < 12; i++) {
+      const a = i * 30 * Math.PI / 180;
+      const outer = (i % 3 === 0) ? 44 : 45;
+      const inner = (i % 3 === 0) ? 38 : 41;
+      const ln = document.createElementNS(SVGNS, "line");
+      ln.setAttribute("class", "tick");
+      ln.setAttribute("x1", (50 + Math.sin(a) * inner).toFixed(1));
+      ln.setAttribute("y1", (50 - Math.cos(a) * inner).toFixed(1));
+      ln.setAttribute("x2", (50 + Math.sin(a) * outer).toFixed(1));
+      ln.setAttribute("y2", (50 - Math.cos(a) * outer).toFixed(1));
+      if (i % 3 === 0) ln.setAttribute("stroke-width", "3");
+      ticks.appendChild(ln);
+    }
+    const hh = document.getElementById("hand-hour");
+    const mm = document.getElementById("hand-min");
+    const ss = document.getElementById("hand-sec");
+    const dateEl = document.getElementById("clock-date");
+    function rot(el, deg) { el.setAttribute("transform", "rotate(" + deg.toFixed(1) + " 50 50)"); }
+    function tick() {
+      const now = new Date();
+      const s = now.getSeconds(), m = now.getMinutes(), h = now.getHours();
+      rot(ss, s * 6);
+      rot(mm, m * 6 + s * 0.1);
+      rot(hh, (h % 12) * 30 + m * 0.5);
+      dateEl.textContent = "יום " + WEEKDAYS[now.getDay()] + " · " +
+        now.getDate() + "/" + (now.getMonth() + 1) + "/" + now.getFullYear();
+    }
+    tick();
+    setInterval(tick, 1000);
+  })();
+
+  // אייקון טאב מתקתק — שעון שמסתובב 🕐🕑🕒
   (function animateFavicon() {
     const CLOCKS = ["🕐","🕑","🕒","🕓","🕔","🕕","🕖","🕗","🕘","🕙","🕚","🕛"];
     const favEl = document.getElementById("favicon");
@@ -1108,6 +1248,11 @@
     tick();
     setInterval(tick, 700);
   })();
+
+  // אתחול EmailJS (אם הוגדרו מפתחות)
+  if (EMAIL.publicKey && window.emailjs) {
+    try { emailjs.init({ publicKey: EMAIL.publicKey }); } catch (e) {}
+  }
 
   render();
   if (!identity) openIdentity();
