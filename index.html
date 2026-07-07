@@ -1,0 +1,873 @@
+﻿
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>לוח מעקב הגעה בזמן 🕒</title>
+<style>
+  :root {
+    --pink: #17b3a3;      /* טורקיז ראשי (חני) */
+    --purple: #2f9fd0;    /* תכלת (רחלי) */
+    --mint: #34d3b0;
+    --yellow: #ffd166;
+    --bg1: #eafaf7;
+    --bg2: #e6f5fb;
+    --card: #ffffff;
+    --text: #244f52;
+    --muted: #6fa3a5;
+    --soft: #eaf7f5;      /* רקע רך בהיר */
+    --line: #d9efec;      /* קווים/גבולות עדינים */
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    background: linear-gradient(135deg, var(--bg1), var(--bg2));
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 12px 60px;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+
+  .layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 26px;
+  }
+  .main { flex: 1 1 auto; min-width: 0; }
+  .stats-side {
+    flex: 0 0 330px;
+    position: sticky;
+    top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  @media (max-width: 860px) {
+    .layout { flex-direction: column; }
+    .stats-side { flex-basis: auto; width: 100%; position: static; }
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  header h1 {
+    margin: 0 0 6px;
+    font-size: 30px;
+    background: linear-gradient(90deg, var(--pink), var(--purple));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  /* זהות המשתמשת */
+  .identity-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 16px 0 8px;
+    flex-wrap: wrap;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .identity-bar .who {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    font-size: 18px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--pink), var(--purple));
+    padding: 7px 18px;
+    border-radius: 999px;
+    box-shadow: 0 6px 16px rgba(23, 179, 163, 0.35);
+  }
+  .identity-bar .who::before {
+    content: "👤";
+    font-size: 15px;
+  }
+  .identity-bar .who.chani {
+    background: linear-gradient(135deg, var(--pink), #63d6c9);
+    box-shadow: 0 6px 16px rgba(23, 179, 163, 0.4);
+  }
+  .identity-bar .who.racheli {
+    background: linear-gradient(135deg, var(--purple), #7fd0ec);
+    box-shadow: 0 6px 16px rgba(47, 159, 208, 0.4);
+  }
+  .identity-bar .who.none {
+    background: var(--soft);
+    color: var(--muted);
+    box-shadow: none;
+  }
+  .identity-bar .who.none::before { content: "❔"; }
+
+  .switch-btn {
+    border: none;
+    background: #d9efec;
+    color: var(--purple);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .switch-btn:hover { background: #cfeae6; }
+
+  .players {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin: 8px 0 24px;
+    flex-wrap: wrap;
+  }
+
+  .player-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    padding: 8px 16px;
+    border-radius: 999px;
+    box-shadow: 0 6px 18px rgba(23, 179, 163, 0.15);
+    font-weight: 600;
+  }
+
+  .dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+  }
+  .dot.chani { background: var(--pink); }
+  .dot.racheli { background: var(--purple); }
+
+  .board {
+    background: var(--card);
+    border-radius: 22px;
+    padding: 10px 14px;
+    box-shadow: 0 12px 40px rgba(36, 79, 82, 0.12);
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th, td {
+    text-align: center;
+    padding: 14px 6px;
+  }
+
+  thead th {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  thead th.mine {
+    color: var(--purple);
+  }
+
+  tbody tr {
+    border-top: 2px dashed #d9efec;
+  }
+
+  .day-name {
+    font-weight: 700;
+    font-size: 16px;
+    padding-right: 10px;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .day-name .name-txt {
+    min-width: 52px;
+    text-align: right;
+  }
+
+  .day-emoji { margin: 0; }
+
+  .day-date {
+    min-width: 46px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    background: #f2fbfa;
+    border-radius: 999px;
+    padding: 3px 0;
+  }
+
+  .day-name.today .day-date {
+    color: #fff;
+    background: linear-gradient(90deg, var(--pink), var(--purple));
+  }
+
+  .cell-btn {
+    border: 2px solid #eee;
+    background: #f2fbfa;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    cursor: pointer;
+    font-size: 22px;
+    transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  .cell-btn:hover { transform: translateY(-2px) scale(1.05); }
+
+  .cell-btn.on-time {
+    background: linear-gradient(135deg, #e4fff5, #c9f7e8);
+    border-color: var(--mint);
+    box-shadow: 0 6px 14px rgba(52, 211, 176, 0.3);
+  }
+
+  .cell-btn.late {
+    background: linear-gradient(135deg, #fff0e6, #ffe0cc);
+    border-color: #ff9a5b;
+    box-shadow: 0 6px 14px rgba(255, 154, 91, 0.3);
+  }
+
+  /* עמודה נעולה (של השנייה) */
+  .cell-btn.locked {
+    cursor: not-allowed;
+    opacity: 0.75;
+  }
+  .cell-btn.locked:hover { transform: none; }
+  .cell-btn.locked.empty::after {
+    content: "🔒";
+    font-size: 13px;
+    opacity: 0.5;
+  }
+
+  /* יום עתידי שעוד לא הגיע */
+  .cell-btn.future {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: repeating-linear-gradient(45deg, #f2fbfa, #f2fbfa 6px, #dff2ef 6px, #dff2ef 12px);
+  }
+  .cell-btn.future:hover { transform: none; box-shadow: none; }
+  .cell-btn.future.empty::after { content: "⏳"; font-size: 13px; opacity: 0.7; }
+
+  .summary {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 26px;
+    flex-wrap: wrap;
+  }
+
+  .score-card {
+    background: var(--card);
+    border-radius: 18px;
+    padding: 16px 26px;
+    text-align: center;
+    box-shadow: 0 8px 22px rgba(36, 79, 82, 0.1);
+    min-width: 130px;
+  }
+
+  .score-card .name { font-weight: 700; margin-bottom: 6px; }
+  .score-card .count {
+    font-size: 30px;
+    font-weight: 800;
+  }
+  .score-card.chani .count { color: var(--pink); }
+  .score-card.racheli .count { color: var(--purple); }
+  .score-card .label { font-size: 13px; color: var(--muted); }
+
+  .actions {
+    text-align: center;
+    margin-top: 24px;
+  }
+
+  .reset-btn {
+    border: none;
+    background: linear-gradient(90deg, var(--pink), var(--purple));
+    color: #fff;
+    padding: 11px 26px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(23, 179, 163, 0.35);
+    transition: transform .12s ease;
+  }
+  .reset-btn:hover { transform: translateY(-2px); }
+
+  .hint {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 14px;
+  }
+
+  /* סטטיסטיקות בצד */
+  .totals-box {
+    background: var(--card);
+    border-radius: 22px;
+    padding: 16px 16px 20px;
+    box-shadow: 0 12px 40px rgba(36, 79, 82, 0.12);
+  }
+  .totals-box h2 {
+    text-align: center;
+    font-size: 20px;
+    margin: 0 0 16px;
+    background: linear-gradient(90deg, var(--pink), var(--purple));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .totals { display: flex; flex-direction: column; gap: 14px; }
+
+  .total-card {
+    border-radius: 18px;
+    padding: 14px 16px;
+    background: #f2fbfa;
+    border: 2px solid #d9efec;
+  }
+  .total-card.chani { border-color: var(--pink); }
+  .total-card.racheli { border-color: var(--purple); }
+  .total-card .who-name { font-weight: 800; font-size: 17px; margin-bottom: 12px; }
+  .total-card.chani .who-name { color: var(--pink); }
+  .total-card.racheli .who-name { color: var(--purple); }
+
+  .stat-lines { display: flex; gap: 10px; }
+  .stat-box {
+    flex: 1;
+    text-align: center;
+    border-radius: 14px;
+    padding: 12px 6px;
+  }
+  .stat-box.ontime { background: linear-gradient(135deg, #e4fff5, #c9f7e8); }
+  .stat-box.latebox { background: linear-gradient(135deg, #fff0e6, #ffe0cc); }
+  .stat-box .big { font-size: 36px; font-weight: 900; line-height: 1; }
+  .stat-box.ontime .big { color: #1f9e7f; }
+  .stat-box.latebox .big { color: #d9772f; }
+  .stat-box .cap { font-size: 12px; font-weight: 700; margin-top: 6px; color: var(--text); }
+
+  /* היסטוריה */
+  .history {
+    background: var(--card);
+    border-radius: 22px;
+    padding: 16px 16px 20px;
+    box-shadow: 0 12px 40px rgba(36, 79, 82, 0.12);
+  }
+  .history h2 {
+    text-align: center;
+    font-size: 20px;
+    margin: 0 0 4px;
+    background: linear-gradient(90deg, var(--purple), var(--mint));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .history .sub {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .hist-card {
+    background: #f2fbfa;
+    border: 1px solid #d9efec;
+    border-radius: 16px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .hist-date {
+    font-weight: 800;
+    font-size: 14px;
+  }
+  .hist-scores {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .hist-score {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .hist-score .who { min-width: 42px; }
+  .hist-score.chani .who { color: var(--pink); }
+  .hist-score.racheli .who { color: var(--purple); }
+  .hist-score .on { color: #1f9e7f; font-weight: 800; }
+  .hist-score .lt { color: #d9772f; font-weight: 800; }
+  .hist-winner {
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 2px;
+  }
+  .history-empty {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  /* מודל בחירת זהות */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(36, 79, 82, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 30px 26px;
+    text-align: center;
+    max-width: 360px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(36, 79, 82, 0.3);
+  }
+  .modal h3 { margin: 0 0 6px; font-size: 22px; }
+  .modal p { margin: 0 0 22px; color: var(--muted); font-size: 14px; }
+  .choose-btns {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .choose-btn {
+    flex: 1;
+    min-width: 120px;
+    border: 2px solid transparent;
+    padding: 16px;
+    border-radius: 18px;
+    font-size: 18px;
+    font-weight: 800;
+    cursor: pointer;
+    color: #fff;
+    transition: transform .12s ease;
+  }
+  .choose-btn:hover { transform: translateY(-3px); }
+
+  .danger-btn {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    border: 1px solid #f3c6c6;
+    background: #fff5f5;
+    color: #d9534f;
+    padding: 9px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .12s ease;
+  }
+  .danger-btn:hover { background: #ffeaea; }
+  .choose-btn.chani { background: linear-gradient(135deg, var(--pink), #63d6c9); }
+  .choose-btn.racheli { background: linear-gradient(135deg, var(--purple), #7fd0ec); }
+
+  @media (max-width: 480px) {
+    .cell-btn { width: 40px; height: 40px; font-size: 19px; }
+    th, td { padding: 10px 3px; }
+    header h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🕒 מי הגיעה בזמן?</h1>
+      <p>לוח המעקב השבועי של חני ורחלי</p>
+    </header>
+
+    <div class="identity-bar">
+      את מסמנת בתור: <span class="who" id="who-label">—</span>
+      <button class="switch-btn" id="switch-btn">החלפת משתמשת</button>
+    </div>
+
+    <div class="players">
+      <div class="player-chip"><span class="dot chani"></span> חני</div>
+      <div class="player-chip"><span class="dot racheli"></span> רחלי</div>
+    </div>
+
+    <div class="layout">
+      <main class="main">
+        <div class="board">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th id="head-chani">חני</th>
+                <th id="head-racheli">רחלי</th>
+              </tr>
+            </thead>
+            <tbody id="board-body"></tbody>
+          </table>
+        </div>
+
+        <div class="summary" id="summary"></div>
+
+        <div class="actions">
+          <button class="reset-btn" id="reset-btn">סיום שבוע ושמירה בארכיון 📁</button>
+        </div>
+
+        <p class="hint">לחיצה על המשבצת שלך: ✅ הגעתי בזמן → ⏰ איחרתי → ריק. הכל נשמר אוטומטית 💾</p>
+      </main>
+
+      <aside class="stats-side">
+        <section class="totals-box">
+          <h2>📊 סה״כ עד עכשיו</h2>
+          <div class="totals" id="totals"></div>
+        </section>
+
+        <section class="history">
+          <h2>📁 שבועות קודמים</h2>
+          <p class="sub">כל שבוע שמסיימות נשמר כאן — למוטיבציה! 💪</p>
+          <div class="history-list" id="history-list"></div>
+          <button class="danger-btn" id="clear-history-btn">איפוס כל ההיסטוריה 🗑️</button>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <!-- מודל בחירת זהות -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h3>מי את? 💗</h3>
+      <p>בחרי את עצמך — תוכלי לסמן רק בעמודה שלך</p>
+      <div class="choose-btns">
+        <button class="choose-btn chani" data-who="chani">חני</button>
+        <button class="choose-btn racheli" data-who="racheli">רחלי</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const DAYS = [
+    { key: "sun", name: "ראשון", emoji: "☀️" },
+    { key: "mon", name: "שני", emoji: "🌸" },
+    { key: "tue", name: "שלישי", emoji: "🌿" },
+    { key: "wed", name: "רביעי", emoji: "🌼" },
+    { key: "thu", name: "חמישי", emoji: "🍀" },
+  ];
+  const PLAYERS = ["chani", "racheli"];
+  const NAMES = { chani: "חני", racheli: "רחלי" };
+  const STATES = ["", "on-time", "late"];
+  const ICONS = { "": "", "on-time": "✅", "late": "⏰" };
+  const STORAGE_KEY = "arrivalTracker_chani_racheli_v2";
+
+  let store = load();
+  let identity = store.identity || null;
+
+  function emptyWeek() {
+    const w = {};
+    DAYS.forEach(d => { w[d.key] = { chani: "", racheli: "" }; });
+    return w;
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.current) {
+          if (!parsed.history) parsed.history = [];
+          return parsed;
+        }
+      }
+      // מיגרציה מהגרסה הישנה (מבנה של ימים בלבד)
+      const old = localStorage.getItem("arrivalTracker_chani_racheli");
+      if (old) {
+        const oldData = JSON.parse(old);
+        const cur = emptyWeek();
+        DAYS.forEach(d => {
+          if (oldData[d.key]) cur[d.key] = {
+            chani: oldData[d.key].chani || "",
+            racheli: oldData[d.key].racheli || ""
+          };
+        });
+        return { identity: null, current: cur, history: [] };
+      }
+    } catch (e) {}
+    return { identity: null, current: emptyWeek(), history: [] };
+  }
+
+  function save() {
+    store.identity = identity;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch (e) {}
+  }
+
+  // מחזיר תאריך לכל יום בשבוע הנוכחי (ראשון עד חמישי), לפי היום של היום
+  function weekDates() {
+    const now = new Date();
+    const sunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    return DAYS.map((d, i) => new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + i));
+  }
+
+  // מזהה יום (מתעלם משעה) להשוואות
+  function dayStamp(d) {
+    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  }
+
+  function isFutureDay(dayIndex) {
+    return dayStamp(weekDates()[dayIndex]) > dayStamp(new Date());
+  }
+
+  function countState(week, player, state) {
+    let c = 0;
+    DAYS.forEach(d => { if (week[d.key] && week[d.key][player] === state) c++; });
+    return c;
+  }
+  function countOnTime(week, player) { return countState(week, player, "on-time"); }
+  function countLate(week, player) { return countState(week, player, "late"); }
+
+  function render() {
+    // סרגל זהות
+    const whoLabel = document.getElementById("who-label");
+    whoLabel.textContent = identity ? NAMES[identity] : "לא נבחר";
+    whoLabel.className = "who " + (identity || "none");
+    document.getElementById("head-chani").className = identity === "chani" ? "mine" : "";
+    document.getElementById("head-racheli").className = identity === "racheli" ? "mine" : "";
+
+    const dates = weekDates();
+    const todayKey = dayStamp(new Date());
+
+    const body = document.getElementById("board-body");
+    body.innerHTML = "";
+    DAYS.forEach((day, i) => {
+      const tr = document.createElement("tr");
+      const date = dates[i];
+      const isFuture = dayStamp(date) > todayKey;
+      const isToday = dayStamp(date) === todayKey;
+
+      const nameTd = document.createElement("td");
+      nameTd.className = "day-name" + (isToday ? " today" : "");
+      nameTd.innerHTML = '<span class="name-txt">' + day.name + '</span>' +
+        '<span class="day-emoji">' + day.emoji + '</span>' +
+        '<span class="day-date">' + date.getDate() + "/" + (date.getMonth() + 1) + '</span>';
+      tr.appendChild(nameTd);
+
+      PLAYERS.forEach(player => {
+        const td = document.createElement("td");
+        const btn = document.createElement("button");
+        const state = store.current[day.key][player] || "";
+        const isMine = identity === player;
+        const canClick = isMine && !isFuture;
+        btn.className = "cell-btn" + (state ? " " + state : "");
+        if (!canClick) btn.className += " locked" + (state ? "" : " empty");
+        if (isFuture) btn.className += " future";
+        btn.textContent = ICONS[state];
+        if (canClick) {
+          btn.title = day.name + " - סמני את עצמך";
+          btn.addEventListener("click", () => cycle(day.key, player));
+        } else if (isFuture) {
+          btn.title = "היום הזה עוד לא הגיע ⏳";
+          if (isMine) btn.addEventListener("click", () => alert("אי אפשר לסמן יום שעוד לא הגיע ⏳"));
+        } else {
+          btn.title = "רק " + NAMES[player] + " יכולה לסמן כאן";
+        }
+        td.appendChild(btn);
+        tr.appendChild(td);
+      });
+
+      body.appendChild(tr);
+    });
+    renderSummary();
+    renderTotals();
+    renderHistory();
+  }
+
+  function renderTotals() {
+    const totalsEl = document.getElementById("totals");
+    totalsEl.innerHTML = "";
+    PLAYERS.forEach(player => {
+      let onTime = 0, late = 0;
+      store.history.forEach(w => {
+        onTime += w.scores[player] || 0;
+        late += (w.late && w.late[player]) || 0;
+      });
+      const card = document.createElement("div");
+      card.className = "total-card " + player;
+      card.innerHTML =
+        '<div class="who-name">' + NAMES[player] + '</div>' +
+        '<div class="stat-lines">' +
+          '<div class="stat-box ontime">' +
+            '<div class="big">' + onTime + '</div>' +
+            '<div class="cap">בזמן ✅</div>' +
+          '</div>' +
+          '<div class="stat-box latebox">' +
+            '<div class="big">' + late + '</div>' +
+            '<div class="cap">איחרה ⏰</div>' +
+          '</div>' +
+        '</div>';
+      totalsEl.appendChild(card);
+    });
+  }
+
+  function cycle(dayKey, player) {
+    if (identity !== player) return;
+    const dayIndex = DAYS.findIndex(d => d.key === dayKey);
+    if (isFutureDay(dayIndex)) return;
+    const current = store.current[dayKey][player] || "";
+    const next = STATES[(STATES.indexOf(current) + 1) % STATES.length];
+    store.current[dayKey][player] = next;
+    save();
+    render();
+  }
+
+  function renderSummary() {
+    const summary = document.getElementById("summary");
+    summary.innerHTML = "";
+    PLAYERS.forEach(player => {
+      const count = countOnTime(store.current, player);
+      const card = document.createElement("div");
+      card.className = "score-card " + player;
+      card.innerHTML =
+        '<div class="name">' + NAMES[player] + '</div>' +
+        '<div class="count">' + count + '</div>' +
+        '<div class="label">ימים בזמן ✅</div>';
+      summary.appendChild(card);
+    });
+  }
+
+  function renderHistory() {
+    const list = document.getElementById("history-list");
+    list.innerHTML = "";
+    if (!store.history.length) {
+      list.innerHTML = '<div class="history-empty">עדיין אין שבועות שמורים — סיימי שבוע כדי לשמור אותו כאן 🌟</div>';
+      return;
+    }
+    // האחרון קודם
+    store.history.slice().reverse().forEach(week => {
+      const card = document.createElement("div");
+      card.className = "hist-card";
+      const chani = week.scores.chani;
+      const racheli = week.scores.racheli;
+      const chaniLate = (week.late && week.late.chani) || 0;
+      const racheliLate = (week.late && week.late.racheli) || 0;
+      let winner;
+      if (chani > racheli) winner = "🏆 חני ניצחה השבוע!";
+      else if (racheli > chani) winner = "🏆 רחלי ניצחה השבוע!";
+      else winner = "🤝 תיקו! שתיכן אלופות";
+      card.innerHTML =
+        '<div class="hist-date">📅 ' + week.label + '</div>' +
+        '<div class="hist-scores">' +
+          '<div class="hist-score chani"><span class="who">חני</span>' +
+            '<span class="on">✅ ' + chani + '</span><span class="lt">⏰ ' + chaniLate + '</span></div>' +
+          '<div class="hist-score racheli"><span class="who">רחלי</span>' +
+            '<span class="on">✅ ' + racheli + '</span><span class="lt">⏰ ' + racheliLate + '</span></div>' +
+        '</div>' +
+        '<div class="hist-winner">' + winner + '</div>';
+      list.appendChild(card);
+    });
+  }
+
+  function formatDate(d) {
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return dd + "/" + mm + "/" + yyyy;
+  }
+
+  function hasAnyMark(week) {
+    return DAYS.some(d => week[d.key].chani || week[d.key].racheli);
+  }
+
+  document.getElementById("reset-btn").addEventListener("click", () => {
+    if (new Date().getDay() < 4) {
+      alert("אפשר לסיים ולשמור שבוע רק מיום חמישי והלאה ⏳");
+      return;
+    }
+    if (!hasAnyMark(store.current)) {
+      alert("אין מה לשמור — השבוע ריק 🙂");
+      return;
+    }
+    if (confirm("לסיים את השבוע, לשמור אותו בארכיון ולהתחיל שבוע חדש?")) {
+      store.history.push({
+        label: "שבוע שהסתיים ב-" + formatDate(new Date()),
+        scores: {
+          chani: countOnTime(store.current, "chani"),
+          racheli: countOnTime(store.current, "racheli")
+        },
+        late: {
+          chani: countLate(store.current, "chani"),
+          racheli: countLate(store.current, "racheli")
+        }
+      });
+      store.current = emptyWeek();
+      save();
+      render();
+    }
+  });
+
+  document.getElementById("clear-history-btn").addEventListener("click", () => {
+    if (!store.history.length) {
+      alert("אין היסטוריה למחוק 🙂");
+      return;
+    }
+    if (confirm("האם את בטוחה? פעולה זו תמחק את כל ההיסטוריה והנתונים שנצברו עד עכשיו, ואי אפשר לבטל אותה.")) {
+      store.history = [];
+      save();
+      render();
+    }
+  });
+
+  // בחירת / החלפת זהות
+  const overlay = document.getElementById("overlay");
+  function openIdentity() { overlay.classList.add("show"); }
+  function closeIdentity() { overlay.classList.remove("show"); }
+
+  document.querySelectorAll(".choose-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      identity = btn.getAttribute("data-who");
+      save();
+      closeIdentity();
+      render();
+    });
+  });
+
+  document.getElementById("switch-btn").addEventListener("click", openIdentity);
+
+  render();
+  if (!identity) openIdentity();
+</script>
+</body>
+</html>
+
+<!-- Injection By NetFree -->
+<script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
+<script src="//netfree.link/injection-script/popup-card-init.js" type="text/javascript" async ></script>
