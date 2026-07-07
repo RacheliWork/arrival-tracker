@@ -1,4 +1,5 @@
 ﻿
+
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -130,6 +131,18 @@
     cursor: pointer;
   }
   .switch-btn:hover { background: #cfeae6; }
+
+  .sync-badge {
+    display: inline-block;
+    margin: 0 auto 12px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 14px;
+    border-radius: 999px;
+  }
+  .sync-badge.on  { color: #1f9e7f; background: #e4fff5; }
+  .sync-badge.off { color: var(--muted); background: var(--soft); }
+  .sync-badge.err { color: #d9534f; background: #fff5f5; }
 
   .players {
     display: flex;
@@ -298,6 +311,42 @@
   .score-card.chani .count { color: var(--pink); }
   .score-card.racheli .count { color: var(--purple); }
   .score-card .label { font-size: 13px; color: var(--muted); }
+  .score-card .streak {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #e07b39;
+    background: #fff4ec;
+    border-radius: 999px;
+    padding: 3px 12px;
+    display: inline-block;
+  }
+
+  .accuracy {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text);
+    background: var(--soft);
+    border-radius: 12px;
+    padding: 7px;
+  }
+
+  /* קונפטי */
+  .confetti-piece {
+    position: fixed;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 200;
+    animation: confetti-fly .85s ease-out forwards;
+  }
+  @keyframes confetti-fly {
+    0%   { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.3) rotate(260deg); opacity: 0; }
+  }
 
   .actions {
     text-align: center;
@@ -519,6 +568,10 @@
       <button class="switch-btn" id="switch-btn">החלפת משתמשת</button>
     </div>
 
+    <div style="text-align:center;">
+      <span class="sync-badge off" id="sync-badge">מצב מקומי (ללא סנכרון)</span>
+    </div>
+
     <div class="players">
       <div class="player-chip"><span class="dot chani"></span> חני</div>
       <div class="player-chip"><span class="dot racheli"></span> רחלי</div>
@@ -590,6 +643,33 @@
   const ICONS = { "": "", "on-time": "✅", "late": "⏰" };
   const STORAGE_KEY = "arrivalTracker_chani_racheli_v2";
 
+  // ===== סנכרון בין המכשירים דרך JSONBin (חינמי) =====
+  // הוראות הפעלה בתחתית העמוד / בהודעה. בלי הפרטים האלה האפליקציה עובדת מקומית בלבד.
+  const SYNC = {
+    binId: "6a4cdf31da38895dfe3a2f8e",
+    key:   "$2a$10$i/Lv0vUdY8FfMrOGJHx8lOAfuPwsmHifdXcj9BZzbX5.qBgugeUE6"
+  };
+  const SYNC_URL = "https://api.jsonbin.io/v3/b/";
+  const SYNC_POLL_MS = 20000; // כל כמה זמן לבדוק עדכונים מהצד השני (אפשר להגדיל אם חורגים ממכסה)
+
+  function syncEnabled() { return !!(SYNC.binId && SYNC.key); }
+  function syncHeaders() {
+    return {
+      "X-Master-Key": SYNC.key,
+      "X-Bin-Versioning": "false",
+      "Content-Type": "application/json"
+    };
+  }
+  function sharedData() {
+    return {
+      current: store.current,
+      history: store.history,
+      weekStart: store.weekStart || null,
+      updatedAt: store.updatedAt || 0
+    };
+  }
+  function touch() { store.updatedAt = Date.now(); }
+
   let store = load();
   let identity = store.identity || null;
 
@@ -655,6 +735,144 @@
   function countOnTime(week, player) { return countState(week, player, "on-time"); }
   function countLate(week, player) { return countState(week, player, "late"); }
 
+  // הרצף הארוך ביותר של ימים בזמן ברצף בשבוע הנוכחי
+  function longestStreak(week, player) {
+    let best = 0, cur = 0;
+    DAYS.forEach(d => {
+      if (week[d.key][player] === "on-time") { cur++; if (cur > best) best = cur; }
+      else cur = 0;
+    });
+    return best;
+  }
+
+  function currentSunday() {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+  }
+  function sundayObj(d) { return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() }; }
+
+  // שמירת השבוע הנוכחי לארכיון והתחלת שבוע חדש
+  function archiveWeek(label) {
+    store.history.push({
+      label: label,
+      scores: {
+        chani: countOnTime(store.current, "chani"),
+        racheli: countOnTime(store.current, "racheli")
+      },
+      late: {
+        chani: countLate(store.current, "chani"),
+        racheli: countLate(store.current, "racheli")
+      }
+    });
+    store.current = emptyWeek();
+    store.weekStart = sundayObj(currentSunday());
+  }
+
+  // ארכוב אוטומטי כשמתחיל שבוע חדש (בנוסף לכפתור הידני)
+  function checkWeekRollover() {
+    const curSun = currentSunday();
+    if (!store.weekStart) { store.weekStart = sundayObj(curSun); persist(); return; }
+    const storedSun = new Date(store.weekStart.y, store.weekStart.m, store.weekStart.d);
+    if (dayStamp(storedSun) !== dayStamp(curSun)) {
+      if (hasAnyMark(store.current)) {
+        const thu = new Date(storedSun.getFullYear(), storedSun.getMonth(), storedSun.getDate() + 4);
+        archiveWeek("שבוע " + formatDate(storedSun) + " – " + formatDate(thu) + " (נשמר אוטומטית)");
+      } else {
+        store.current = emptyWeek();
+        store.weekStart = sundayObj(curSun);
+      }
+      persist();
+    }
+  }
+
+  // קונפטי חגיגי כשמסמנים "בזמן"
+  function confetti(x, y) {
+    const colors = ["#17b3a3", "#2f9fd0", "#34d3b0", "#ffd166", "#63d6c9", "#7fd0ec"];
+    for (let i = 0; i < 18; i++) {
+      const p = document.createElement("div");
+      p.className = "confetti-piece";
+      p.style.left = x + "px";
+      p.style.top = y + "px";
+      p.style.background = colors[i % colors.length];
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 45 + Math.random() * 70;
+      p.style.setProperty("--dx", Math.round(Math.cos(ang) * dist) + "px");
+      p.style.setProperty("--dy", Math.round(Math.sin(ang) * dist - 30) + "px");
+      p.style.animationDelay = Math.round(Math.random() * 60) + "ms";
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 950);
+    }
+  }
+
+  // שמירה מקומית + דחיפה לשרת המשותף
+  function persist() {
+    touch();
+    save();
+    pushRemote();
+  }
+
+  function setSyncBadge(state, text) {
+    const badge = document.getElementById("sync-badge");
+    if (!badge) return;
+    badge.className = "sync-badge " + state;
+    badge.textContent = text;
+  }
+
+  async function pushRemote() {
+    if (!syncEnabled()) return;
+    try {
+      const res = await fetch(SYNC_URL + SYNC.binId, {
+        method: "PUT",
+        headers: syncHeaders(),
+        body: JSON.stringify(sharedData())
+      });
+      setSyncBadge(res.ok ? "on" : "err", res.ok ? "🔄 מסונכרן" : "⚠️ בעיית סנכרון");
+    } catch (e) {
+      setSyncBadge("err", "⚠️ אין חיבור");
+    }
+  }
+
+  async function pullRemote(initial) {
+    if (!syncEnabled()) return;
+    try {
+      const res = await fetch(SYNC_URL + SYNC.binId + "/latest", { headers: syncHeaders() });
+      if (!res.ok) { setSyncBadge("err", "⚠️ בעיית סנכרון"); return; }
+      const data = await res.json();
+      const rec = data.record || {};
+      setSyncBadge("on", "🔄 מסונכרן");
+      if (typeof rec.updatedAt === "number" && rec.updatedAt > (store.updatedAt || 0)) {
+        // הצד השני עדכן — מאמצים את הגרסה שלו
+        store.current = rec.current || emptyWeek();
+        store.history = Array.isArray(rec.history) ? rec.history : [];
+        if (rec.weekStart) store.weekStart = rec.weekStart;
+        store.updatedAt = rec.updatedAt;
+        save();
+        render();
+      } else if (initial && typeof rec.updatedAt !== "number") {
+        // ה-bin ריק בפעם הראשונה — מעלים את המצב המקומי כבסיס
+        persist();
+      }
+    } catch (e) {
+      setSyncBadge("err", "⚠️ אין חיבור");
+    }
+  }
+
+  function startSync() {
+    if (!syncEnabled()) {
+      setSyncBadge("off", "מצב מקומי (ללא סנכרון)");
+      checkWeekRollover();
+      render();
+      return;
+    }
+    setSyncBadge("on", "🔄 מתחבר…");
+    pullRemote(true).then(() => { checkWeekRollover(); render(); });
+    setInterval(() => { if (document.visibilityState === "visible") pullRemote(false); }, SYNC_POLL_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") pullRemote(false);
+    });
+    window.addEventListener("focus", () => pullRemote(false));
+  }
+
   function render() {
     // סרגל זהות
     const whoLabel = document.getElementById("who-label");
@@ -693,7 +911,7 @@
         btn.textContent = ICONS[state];
         if (canClick) {
           btn.title = day.name + " - סמני את עצמך";
-          btn.addEventListener("click", () => cycle(day.key, player));
+          btn.addEventListener("click", (e) => cycle(day.key, player, e.currentTarget));
         } else if (isFuture) {
           btn.title = "היום הזה עוד לא הגיע ⏳";
           if (isMine) btn.addEventListener("click", () => alert("אי אפשר לסמן יום שעוד לא הגיע ⏳"));
@@ -720,6 +938,8 @@
         onTime += w.scores[player] || 0;
         late += (w.late && w.late[player]) || 0;
       });
+      const total = onTime + late;
+      const pct = total > 0 ? Math.round(onTime / total * 100) : null;
       const card = document.createElement("div");
       card.className = "total-card " + player;
       card.innerHTML =
@@ -733,19 +953,24 @@
             '<div class="big">' + late + '</div>' +
             '<div class="cap">איחרה ⏰</div>' +
           '</div>' +
-        '</div>';
+        '</div>' +
+        '<div class="accuracy">🎯 דיוק: ' + (pct === null ? "—" : pct + "%") + '</div>';
       totalsEl.appendChild(card);
     });
   }
 
-  function cycle(dayKey, player) {
+  function cycle(dayKey, player, btn) {
     if (identity !== player) return;
     const dayIndex = DAYS.findIndex(d => d.key === dayKey);
     if (isFutureDay(dayIndex)) return;
     const current = store.current[dayKey][player] || "";
     const next = STATES[(STATES.indexOf(current) + 1) % STATES.length];
     store.current[dayKey][player] = next;
-    save();
+    if (next === "on-time" && btn) {
+      const r = btn.getBoundingClientRect();
+      confetti(r.left + r.width / 2, r.top + r.height / 2);
+    }
+    persist();
     render();
   }
 
@@ -756,10 +981,12 @@
       const count = countOnTime(store.current, player);
       const card = document.createElement("div");
       card.className = "score-card " + player;
+      const streak = longestStreak(store.current, player);
       card.innerHTML =
         '<div class="name">' + NAMES[player] + '</div>' +
         '<div class="count">' + count + '</div>' +
-        '<div class="label">ימים בזמן ✅</div>';
+        '<div class="label">ימים בזמן ✅</div>' +
+        '<div class="streak">🔥 רצף: ' + streak + '</div>';
       summary.appendChild(card);
     });
   }
@@ -817,19 +1044,8 @@
       return;
     }
     if (confirm("לסיים את השבוע, לשמור אותו בארכיון ולהתחיל שבוע חדש?")) {
-      store.history.push({
-        label: "שבוע שהסתיים ב-" + formatDate(new Date()),
-        scores: {
-          chani: countOnTime(store.current, "chani"),
-          racheli: countOnTime(store.current, "racheli")
-        },
-        late: {
-          chani: countLate(store.current, "chani"),
-          racheli: countLate(store.current, "racheli")
-        }
-      });
-      store.current = emptyWeek();
-      save();
+      archiveWeek("שבוע שהסתיים ב-" + formatDate(new Date()));
+      persist();
       render();
     }
   });
@@ -841,7 +1057,7 @@
     }
     if (confirm("האם את בטוחה? פעולה זו תמחק את כל ההיסטוריה והנתונים שנצברו עד עכשיו, ואי אפשר לבטל אותה.")) {
       store.history = [];
-      save();
+      persist();
       render();
     }
   });
@@ -864,9 +1080,14 @@
 
   render();
   if (!identity) openIdentity();
+  startSync();
 </script>
 </body>
 </html>
+
+<!-- Injection By NetFree -->
+<script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
+<script src="//netfree.link/injection-script/popup-card-init.js" type="text/javascript" async ></script>
 
 <!-- Injection By NetFree -->
 <script src="//netfree.link/injection-script/go-payment.js" type="text/javascript" async ></script>
