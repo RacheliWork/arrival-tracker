@@ -312,6 +312,12 @@
     box-shadow: 0 6px 14px rgba(255, 154, 91, 0.3);
   }
 
+  .cell-btn.vacation {
+    background: linear-gradient(135deg, #eef2ff, #dfe6ff);
+    border-color: #8ea2ff;
+    box-shadow: 0 6px 14px rgba(142, 162, 255, 0.3);
+  }
+
   /* עמודה נעולה (של השנייה) */
   .cell-btn.locked {
     cursor: not-allowed;
@@ -460,9 +466,11 @@
   }
   .stat-box.ontime { background: linear-gradient(135deg, #e4fff5, #c9f7e8); }
   .stat-box.latebox { background: linear-gradient(135deg, #fff0e6, #ffe0cc); }
+  .stat-box.vacbox { background: linear-gradient(135deg, #eef2ff, #dfe6ff); }
   .stat-box .big { font-size: 36px; font-weight: 900; line-height: 1; }
   .stat-box.ontime .big { color: #1f9e7f; }
   .stat-box.latebox .big { color: #d9772f; }
+  .stat-box.vacbox .big { color: #5566cc; }
   .stat-box .cap { font-size: 12px; font-weight: 700; margin-top: 6px; color: var(--text); }
 
   /* היסטוריה */
@@ -522,6 +530,7 @@
   .hist-score.racheli .who { color: var(--purple); }
   .hist-score .on { color: #1f9e7f; font-weight: 800; }
   .hist-score .lt { color: #d9772f; font-weight: 800; }
+  .hist-score .vc { color: #5566cc; font-weight: 800; }
   .hist-winner {
     font-size: 13px;
     color: var(--muted);
@@ -595,6 +604,45 @@
   .danger-btn:hover { background: #ffeaea; }
   .choose-btn.chani { background: linear-gradient(135deg, var(--pink), #63d6c9); }
   .choose-btn.racheli { background: linear-gradient(135deg, var(--purple), #7fd0ec); }
+  .choose-btn.selected { outline: 3px solid rgba(36, 79, 82, 0.25); outline-offset: 2px; }
+
+  .modal input.pw {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    font-size: 18px;
+    margin-bottom: 12px;
+    text-align: center;
+    letter-spacing: 4px;
+    direction: ltr;
+  }
+  .modal input.pw:focus { outline: none; border-color: var(--purple); }
+  .modal .field-label {
+    text-align: right;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    margin: 0 2px 4px;
+  }
+  .modal .pw-error {
+    font-size: 13px;
+    font-weight: 700;
+    color: #d9534f;
+    min-height: 18px;
+    margin-bottom: 8px;
+  }
+  .modal .pw-error.info { color: var(--muted); }
+  .link-btn {
+    background: none;
+    border: none;
+    color: var(--purple);
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 14px;
+    text-decoration: underline;
+  }
 
   @media (max-width: 480px) {
     .cell-btn { width: 40px; height: 40px; font-size: 19px; }
@@ -657,7 +705,7 @@
           <button class="reset-btn" id="reset-btn">סיום שבוע ושמירה בארכיון 📁</button>
         </div>
 
-        <p class="hint">לחיצה על המשבצת שלך: ✅ הגעתי בזמן → ⏰ איחרתי → ריק. הכל נשמר אוטומטית 💾</p>
+        <p class="hint">לחיצה על המשבצת שלך: ✅ הגעתי בזמן → ⏰ איחרתי → 🏝️ יום חופש → ריק. יום חופש לא נחשב כאיחור. הכל נשמר אוטומטית 💾</p>
       </main>
 
       <aside class="stats-side">
@@ -680,11 +728,53 @@
   <div class="overlay" id="overlay">
     <div class="modal">
       <h3>מי את? 💗</h3>
-      <p>בחרי את עצמך — תוכלי לסמן רק בעמודה שלך</p>
+      <p>בחרי את עצמך — תוכלי לסמן רק בעמודה שלך (עם סיסמה 🔒)</p>
       <div class="choose-btns">
         <button class="choose-btn chani" data-who="chani">חני</button>
         <button class="choose-btn racheli" data-who="racheli">רחלי</button>
       </div>
+      <button class="link-btn" id="change-pw-link">🔑 שינוי סיסמה</button>
+    </div>
+  </div>
+
+  <!-- מודל אימות סיסמה -->
+  <div class="overlay" id="pw-overlay">
+    <div class="modal">
+      <h3>אימות סיסמה 🔒</h3>
+      <p id="pw-verify-sub">הכניסי את הסיסמה שלך</p>
+      <div class="field-label">סיסמה</div>
+      <input type="password" class="pw" id="pw-verify-input" inputmode="numeric" autocomplete="off" />
+      <div class="pw-error" id="pw-verify-error"></div>
+      <div class="choose-btns">
+        <button class="choose-btn chani" id="pw-verify-ok">אישור ✅</button>
+      </div>
+      <button class="link-btn" id="pw-verify-cancel">ביטול</button>
+    </div>
+  </div>
+
+  <!-- מודל שינוי סיסמה -->
+  <div class="overlay" id="pwchg-overlay">
+    <div class="modal">
+      <h3>שינוי סיסמה 🔑</h3>
+      <p>בחרי משתמשת, ואז הזיני את הסיסמה הנוכחית והחדשה</p>
+      <div class="choose-btns" id="pwchg-who">
+        <button class="choose-btn chani" data-who="chani">חני</button>
+        <button class="choose-btn racheli" data-who="racheli">רחלי</button>
+      </div>
+      <div id="pwchg-fields" style="display:none; margin-top:16px;">
+        <div class="pw-error info" id="pwchg-who-label"></div>
+        <div class="field-label">סיסמה נוכחית</div>
+        <input type="password" class="pw" id="pwchg-current" inputmode="numeric" autocomplete="off" />
+        <div class="field-label">סיסמה חדשה</div>
+        <input type="password" class="pw" id="pwchg-new" inputmode="numeric" autocomplete="off" />
+        <div class="field-label">אימות סיסמה חדשה</div>
+        <input type="password" class="pw" id="pwchg-new2" inputmode="numeric" autocomplete="off" />
+        <div class="pw-error" id="pwchg-error"></div>
+        <div class="choose-btns">
+          <button class="choose-btn racheli" id="pwchg-ok">שמירה 💾</button>
+        </div>
+      </div>
+      <button class="link-btn" id="pwchg-cancel">ביטול</button>
     </div>
   </div>
 
@@ -698,8 +788,8 @@
   ];
   const PLAYERS = ["chani", "racheli"];
   const NAMES = { chani: "חני", racheli: "רחלי" };
-  const STATES = ["", "on-time", "late"];
-  const ICONS = { "": "", "on-time": "✅", "late": "⏰" };
+  const STATES = ["", "on-time", "late", "vacation"];
+  const ICONS = { "": "", "on-time": "✅", "late": "⏰", "vacation": "🏝️" };
   const STORAGE_KEY = "arrivalTracker_chani_racheli_v2";
 
   // ===== סנכרון בין המכשירים דרך JSONBin (חינמי) =====
@@ -739,6 +829,7 @@
       history: store.history,
       weekStart: store.weekStart || null,
       emailed: store.emailed || {},
+      passwords: store.passwords || {},
       updatedAt: store.updatedAt || 0
     };
   }
@@ -746,6 +837,14 @@
 
   let store = load();
   let identity = store.identity || null;
+
+  // סיסמאות לכל משתמשת — ברירת מחדל 1111, מסונכרנות בין המכשירים
+  function ensurePasswords() {
+    if (!store.passwords || typeof store.passwords !== "object") store.passwords = {};
+    PLAYERS.forEach(p => { if (!store.passwords[p]) store.passwords[p] = "1111"; });
+  }
+  ensurePasswords();
+  function getPw(who) { return (store.passwords && store.passwords[who]) || "1111"; }
 
   function emptyWeek() {
     const w = {};
@@ -808,6 +907,7 @@
   }
   function countOnTime(week, player) { return countState(week, player, "on-time"); }
   function countLate(week, player) { return countState(week, player, "late"); }
+  function countVacation(week, player) { return countState(week, player, "vacation"); }
 
   // הרצף הארוך ביותר של ימים בזמן ברצף בשבוע הנוכחי
   function longestStreak(week, player) {
@@ -836,6 +936,10 @@
       late: {
         chani: countLate(store.current, "chani"),
         racheli: countLate(store.current, "racheli")
+      },
+      vacation: {
+        chani: countVacation(store.current, "chani"),
+        racheli: countVacation(store.current, "racheli")
       }
     };
     store.history.push(week);
@@ -950,6 +1054,8 @@
         store.history = Array.isArray(rec.history) ? rec.history : [];
         if (rec.weekStart) store.weekStart = rec.weekStart;
         if (rec.emailed) store.emailed = rec.emailed;
+        if (rec.passwords) store.passwords = rec.passwords;
+        ensurePasswords();
         store.updatedAt = rec.updatedAt;
         save();
         render();
@@ -1052,10 +1158,11 @@
     const totalsEl = document.getElementById("totals");
     totalsEl.innerHTML = "";
     PLAYERS.forEach(player => {
-      let onTime = 0, late = 0;
+      let onTime = 0, late = 0, vacation = 0;
       store.history.forEach(w => {
         onTime += w.scores[player] || 0;
         late += (w.late && w.late[player]) || 0;
+        vacation += (w.vacation && w.vacation[player]) || 0;
       });
       const total = onTime + late;
       const pct = total > 0 ? Math.round(onTime / total * 100) : null;
@@ -1071,6 +1178,10 @@
           '<div class="stat-box latebox">' +
             '<div class="big">' + late + '</div>' +
             '<div class="cap">איחרה ⏰</div>' +
+          '</div>' +
+          '<div class="stat-box vacbox">' +
+            '<div class="big">' + vacation + '</div>' +
+            '<div class="cap">חופש 🏝️</div>' +
           '</div>' +
         '</div>' +
         '<div class="accuracy">🎯 דיוק: ' + (pct === null ? "—" : pct + "%") + '</div>';
@@ -1125,6 +1236,8 @@
       const racheli = week.scores.racheli;
       const chaniLate = (week.late && week.late.chani) || 0;
       const racheliLate = (week.late && week.late.racheli) || 0;
+      const chaniVac = (week.vacation && week.vacation.chani) || 0;
+      const racheliVac = (week.vacation && week.vacation.racheli) || 0;
       let winner;
       if (chani > racheli) winner = "🏆 חני ניצחה השבוע!";
       else if (racheli > chani) winner = "🏆 רחלי ניצחה השבוע!";
@@ -1133,9 +1246,11 @@
         '<div class="hist-date">📅 ' + week.label + '</div>' +
         '<div class="hist-scores">' +
           '<div class="hist-score chani"><span class="who">חני</span>' +
-            '<span class="on">✅ ' + chani + '</span><span class="lt">⏰ ' + chaniLate + '</span></div>' +
+            '<span class="on">✅ ' + chani + '</span><span class="lt">⏰ ' + chaniLate + '</span>' +
+            (chaniVac ? '<span class="vc">🏝️ ' + chaniVac + '</span>' : '') + '</div>' +
           '<div class="hist-score racheli"><span class="who">רחלי</span>' +
-            '<span class="on">✅ ' + racheli + '</span><span class="lt">⏰ ' + racheliLate + '</span></div>' +
+            '<span class="on">✅ ' + racheli + '</span><span class="lt">⏰ ' + racheliLate + '</span>' +
+            (racheliVac ? '<span class="vc">🏝️ ' + racheliVac + '</span>' : '') + '</div>' +
         '</div>' +
         '<div class="hist-winner">' + winner + '</div>';
       list.appendChild(card);
@@ -1187,16 +1302,92 @@
   function openIdentity() { overlay.classList.add("show"); }
   function closeIdentity() { overlay.classList.remove("show"); }
 
-  document.querySelectorAll(".choose-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      identity = btn.getAttribute("data-who");
-      save();
-      closeIdentity();
-      render();
-    });
+  // בחירת זהות → דורש אימות סיסמה
+  document.querySelectorAll("#overlay .choose-btn").forEach(btn => {
+    btn.addEventListener("click", () => openPwVerify(btn.getAttribute("data-who")));
   });
 
   document.getElementById("switch-btn").addEventListener("click", openIdentity);
+
+  // ===== אימות סיסמה בעת החלפת משתמשת =====
+  const pwOverlay = document.getElementById("pw-overlay");
+  const pwInput = document.getElementById("pw-verify-input");
+  const pwError = document.getElementById("pw-verify-error");
+  let pendingWho = null;
+
+  function openPwVerify(who) {
+    pendingWho = who;
+    document.getElementById("pw-verify-sub").textContent = "הכניסי את הסיסמה של " + NAMES[who] + " 🔒";
+    pwInput.value = "";
+    pwError.textContent = "";
+    pwOverlay.classList.add("show");
+    setTimeout(() => pwInput.focus(), 60);
+  }
+  function closePwVerify() { pwOverlay.classList.remove("show"); pendingWho = null; }
+  function submitPwVerify() {
+    if (!pendingWho) return;
+    if (pwInput.value === getPw(pendingWho)) {
+      identity = pendingWho;
+      save();
+      closePwVerify();
+      closeIdentity();
+      render();
+    } else {
+      pwError.textContent = "סיסמה שגויה ❌";
+      pwInput.value = "";
+      pwInput.focus();
+    }
+  }
+  document.getElementById("pw-verify-ok").addEventListener("click", submitPwVerify);
+  document.getElementById("pw-verify-cancel").addEventListener("click", closePwVerify);
+  pwInput.addEventListener("keydown", e => { if (e.key === "Enter") submitPwVerify(); });
+
+  // ===== שינוי סיסמה =====
+  const pwchgOverlay = document.getElementById("pwchg-overlay");
+  const pwchgFields = document.getElementById("pwchg-fields");
+  const pwchgError = document.getElementById("pwchg-error");
+  let pwchgWho = null;
+
+  function openPwChange() {
+    pwchgWho = null;
+    pwchgFields.style.display = "none";
+    pwchgError.textContent = "";
+    document.getElementById("pwchg-current").value = "";
+    document.getElementById("pwchg-new").value = "";
+    document.getElementById("pwchg-new2").value = "";
+    document.querySelectorAll("#pwchg-who .choose-btn").forEach(b => b.classList.remove("selected"));
+    pwchgOverlay.classList.add("show");
+  }
+  function closePwChange() { pwchgOverlay.classList.remove("show"); }
+
+  document.querySelectorAll("#pwchg-who .choose-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      pwchgWho = btn.getAttribute("data-who");
+      document.querySelectorAll("#pwchg-who .choose-btn").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      pwchgFields.style.display = "block";
+      pwchgError.textContent = "";
+      document.getElementById("pwchg-who-label").textContent = "משנה סיסמה עבור " + NAMES[pwchgWho];
+      document.getElementById("pwchg-current").focus();
+    });
+  });
+
+  document.getElementById("pwchg-ok").addEventListener("click", () => {
+    if (!pwchgWho) { pwchgError.textContent = "בחרי משתמשת קודם"; return; }
+    const cur = document.getElementById("pwchg-current").value;
+    const nw = document.getElementById("pwchg-new").value;
+    const nw2 = document.getElementById("pwchg-new2").value;
+    if (cur !== getPw(pwchgWho)) { pwchgError.textContent = "הסיסמה הנוכחית שגויה ❌"; return; }
+    if (!nw) { pwchgError.textContent = "יש להזין סיסמה חדשה"; return; }
+    if (nw !== nw2) { pwchgError.textContent = "הסיסמאות החדשות אינן תואמות ❌"; return; }
+    ensurePasswords();
+    store.passwords[pwchgWho] = nw;
+    persist();
+    closePwChange();
+    alert("הסיסמה של " + NAMES[pwchgWho] + " שונתה בהצלחה ✅");
+  });
+  document.getElementById("pwchg-cancel").addEventListener("click", closePwChange);
+  document.getElementById("change-pw-link").addEventListener("click", openPwChange);
 
   // שעון אנלוגי חי בפינה — מחוגים מסתובבים + תאריך, מתעדכן כל שנייה
   (function analogClock() {
