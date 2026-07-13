@@ -828,6 +828,7 @@
       current: store.current,
       history: store.history,
       weekStart: store.weekStart || null,
+      weekManualSaved: store.weekManualSaved || false,
       emailed: store.emailed || {},
       passwords: store.passwords || {},
       updatedAt: store.updatedAt || 0
@@ -926,7 +927,7 @@
   function sundayObj(d) { return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() }; }
 
   // שמירת השבוע הנוכחי לארכיון והתחלת שבוע חדש
-  function archiveWeek(label) {
+  function archiveWeek(label, manual) {
     const week = {
       label: label,
       scores: {
@@ -945,6 +946,7 @@
     store.history.push(week);
     store.current = emptyWeek();
     store.weekStart = sundayObj(currentSunday());
+    store.weekManualSaved = manual ? true : false;
     return week;
   }
 
@@ -981,12 +983,13 @@
     const storedSun = new Date(store.weekStart.y, store.weekStart.m, store.weekStart.d);
     if (dayStamp(storedSun) !== dayStamp(curSun)) {
       let archived = null;
-      if (hasAnyMark(store.current)) {
+      if (hasAnyMark(store.current) && !store.weekManualSaved) {
         const thu = new Date(storedSun.getFullYear(), storedSun.getMonth(), storedSun.getDate() + 4);
         archived = archiveWeek("שבוע " + formatDate(storedSun) + " – " + formatDate(thu) + " (נשמר אוטומטית)");
       } else {
         store.current = emptyWeek();
         store.weekStart = sundayObj(curSun);
+        store.weekManualSaved = false;
       }
       persist();
       if (archived) maybeSendWeeklyEmail(archived);
@@ -1053,6 +1056,7 @@
         store.current = rec.current || emptyWeek();
         store.history = Array.isArray(rec.history) ? rec.history : [];
         if (rec.weekStart) store.weekStart = rec.weekStart;
+        if (rec.weekManualSaved !== undefined) store.weekManualSaved = rec.weekManualSaved;
         if (rec.emailed) store.emailed = rec.emailed;
         if (rec.passwords) store.passwords = rec.passwords;
         ensurePasswords();
@@ -1071,12 +1075,13 @@
   function startSync() {
     if (!syncEnabled()) {
       setSyncBadge("off", "מצב מקומי (ללא סנכרון)");
+      deduplicateHistory();
       checkWeekRollover();
       render();
       return;
     }
     setSyncBadge("on", "🔄 מתחבר…");
-    pullRemote(true).then(() => { checkWeekRollover(); render(); });
+    pullRemote(true).then(() => { deduplicateHistory(); checkWeekRollover(); render(); });
 
     // מעקב פעילות — כדי לעצור בדיקות בטאב שנשכח פתוח
     let lastActivity = Date.now();
@@ -1268,6 +1273,32 @@
     return DAYS.some(d => week[d.key].chani || week[d.key].racheli);
   }
 
+  // מנקה כפילויות בהיסטוריה: אם יש רשומה ידנית ורשומה אוטומטית לאותו שבוע — מוחק האוטומטית
+  function deduplicateHistory() {
+    function thuDateFromAuto(label) {
+      const m = label.match(/(\d{2}\/\d{2}\/\d{4})\s*[–-]\s*(\d{2}\/\d{2}\/\d{4})/);
+      return m ? m[2] : null;
+    }
+    function dateFromManual(label) {
+      const m = label.match(/שהסתיים ב-(\d{2}\/\d{2}\/\d{4})/);
+      return m ? m[1] : null;
+    }
+    const manualDates = new Set();
+    store.history.forEach(w => {
+      if (!w.label.includes("(נשמר אוטומטית)")) {
+        const d = dateFromManual(w.label);
+        if (d) manualDates.add(d);
+      }
+    });
+    const before = store.history.length;
+    store.history = store.history.filter(w => {
+      if (!w.label.includes("(נשמר אוטומטית)")) return true;
+      const thuDate = thuDateFromAuto(w.label);
+      return !thuDate || !manualDates.has(thuDate);
+    });
+    if (store.history.length < before) persist();
+  }
+
   document.getElementById("reset-btn").addEventListener("click", () => {
     if (new Date().getDay() < 4) {
       alert("אפשר לסיים ולשמור שבוע רק מיום חמישי והלאה ⏳");
@@ -1278,7 +1309,7 @@
       return;
     }
     if (confirm("לסיים את השבוע, לשמור אותו בארכיון ולהתחיל שבוע חדש?")) {
-      const week = archiveWeek("שבוע שהסתיים ב-" + formatDate(new Date()));
+      const week = archiveWeek("שבוע שהסתיים ב-" + formatDate(new Date()), true);
       persist();
       render();
       maybeSendWeeklyEmail(week);
